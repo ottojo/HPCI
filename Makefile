@@ -4,7 +4,7 @@ all: hpci.pdf
 	$(info ARTIFACTS:hpci.pdf)
 
 .PHONY: hpci.pdf
-hpci.pdf: tikz-uml.sty
+hpci.pdf:
 	$(LATEXMK) -pdf hpci.tex
 
 .PHONY: clean
