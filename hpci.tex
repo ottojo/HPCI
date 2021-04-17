@@ -72,13 +72,13 @@
 \end{titlepage}
 
 \section{Introduction}
-%\subsection{Topic Description}
-%Parallelization. Since the processor speed is hardly increasing anymore, the
-%only way to really improve performance of an application is to parallelize.
-%Discuss the different ways in which an application can be parallelized and why
-%and when which method is preferable. Do all parallel applications scale well?
-%Which factors determine the performance / scalability of an application and how
-%can you affect them when writing the application.
+% \subsection{Topic Description}
+% Parallelization. Since the processor speed is hardly increasing anymore, the
+% only way to really improve performance of an application is to parallelize.
+% Discuss the different ways in which an application can be parallelized and why
+% and when which method is preferable. Do all parallel applications scale well?
+% Which factors determine the performance / scalability of an application and
+% how can you affect them when writing the application.
 
 In recent history, processor performance indicators such as frequency seem to
 have stagnated. At the same time however, the number of processing cores in a
@@ -104,8 +104,127 @@ scalability, will be presented and discussed.
 
 \section{Analysis}
 
-\subsection{Scalability: Amdahl's Law}
+\subsection{Parallel Computing}
+\label{sec:parallel_computing}
+A classification of the many parallel computing architectures has been suggested
+by Flynn. Flynn distinguishes computer architectures by the number of
+instruction streams (Singe Instruction \emph{SI} or Multiple Instruction
+\emph{MI}) and number of data streams (Single Data \emph{SD} or Multiple Data
+\emph{MD}). Of the four resulting classifications, all but the \emph{MISD}
+variant are commonly found, and of those the Single Instruction Multiple Data
+\emph{SIMD} and Multiple Instruction Multiple Data \emph{MIMD} variants are of
+interest to us here. Most commonly available processors for general purpose
+computing follow a combination of those approaches: Multicore processors that
+allow simultaneous execution of multiple programs on separate data (\emph{MIMD}
+classification) are commonplace. Additionally, the individual processing cores
+often offer \emph{vector extensions}, which as a form of \emph{SIMD} computing
+offer fast mathematical operations on multiple values (vectors) at once.
 
+Distributed systems such as entire HPC clusters may also be classified as
+\emph{MIMD} computing architectures.
+
+It is apparent that \emph{MIMD} architectures in particular are a very far
+ranging classification, and lend themselves to more granular categorizing. A
+useful distinction is between shared-memory and non-shared-memory systems. The
+defining characteristic of a non-shared-memory system is the need for a
+dedicated communication channel between multiple processing units. On a
+shared-memory system, this communication can happen implicitly through memory
+regions accessible to multiple processing units.
+
+On the largest scale, such non-shared-memory, \emph{MIMD} systems such as high
+performance clusters perform parallel computation by providing a large number of
+nodes, that each run independently. A fast interconnect between the individual
+nodes is usually present, but has to be used explicitly (using libraries such as
+MPI for example).
+
+Single processing nodes (or individual computers, for that matter) are
+themselves \emph{MIMD} systems, but this time usually of the shared-memory
+variant. All processors share common RAM, and the operating system provides
+means of running parallel computation: Processes usually receive their own
+protected memory segment for safety and security purposes, but multiple threads
+inside one process can access the same memory without any operating system
+intervention. The operating system provides scheduling for processes and threads
+(and has no need to differentiate between a process and thread during
+scheduling), which allows many programs and programs with more threads than
+processors to run concurrently. The operating system periodically interrupts
+execution and selects a different, waiting, thread for execution. Those context
+switches can yield a substantial performance deficit when many threads are used,
+and the ratio between program execution time and time spent switching threads is
+bad.
+
+\subsection{Task Parallelism}
+To benefit from the multiple ways of parallel computing described in
+\cref{sec:parallel_computing}, an application has to be analyzed in which ways
+it can be parallelized, and how it scales with an increasing degree of
+parallelization.
+
+In order to explore and model the ways in which an application can be
+parallelized, two models are usually considered: Task- and data parallelism.
+
+In this first part, the concept of task parallelism is explored. If an
+application consists of multiple individual tasks, those can be performed
+according to its dependencies. \Cref{fig:task_graph} illustrates this in terms
+of a data flow graph: The individual tasks all require some input data, which is
+provided by another task. It is however apparent that the tasks of creating a
+grayscale image and then detecting the lane and the task of creating the RGB
+image and detecting traffic signs can be executed in parallel. They both depend
+on the camera image, but execute independently. The serial part of the
+application continues with the tracking step, which depends on the results of
+all the previous detection steps. Planning can only be performed after the
+tracking step.
+
+\begin{figure}
+	\centering
+	\begin{tikzpicture}
+		\node[draw] (camera) {Camera};
+		\node[draw] (grayscale) [right=of camera] {Bayer to grayscale};
+		\node[draw] (lane) [right=of grayscale] {Detect lane};
+		\node[draw] (rgb) [below=of camera] {Bayer to RGB};
+		\node[draw] (signs) [right=of rgb] {Detect signs};
+		\node[draw] (tracking) [right=of signs] {Tracking};
+		\node[draw] (planning) [right=of tracking] {Planning};
+		\node[draw] (viz) [below=of rgb] {Vizualization};
+		\node[draw] (odom) [below=of tracking] {Odometry};
+
+		\draw[->] (camera) -- (grayscale);
+		\draw[->] (camera) -- (rgb);
+		\draw[->] (grayscale) -- (lane);
+		\draw[->] (lane) -- (tracking);
+		\draw[->] (tracking) -- (planning);
+		\draw[->] (rgb) -- (signs);
+		\draw[->] (signs) -- (tracking);
+		\draw[->] (rgb) -- (viz);
+		\draw[->] (odom) -- (tracking);
+	\end{tikzpicture}
+	\caption{Data flow graph of a fictional task-parallel autonomous-driving application}
+	\label{fig:task_graph}
+\end{figure}
+
+The \emph{critical path} is the path of execution that determines the execution
+time of the entire application. This corresponds to the serial part as proposed
+by Amdahl.
+
+\subsection{Data Parallelism}
+In data-parallel applications, only one single task is considered. This task is
+however applied to a large amount of data, which can be split up to parallelize
+the application.
+
+It has to be ensured that no data dependencies exist between the individual
+iterations of the task, since tasks would have to wait for completion of the
+previous one otherwise.
+
+One of the main difficulties in parallelizing a data-parallel application is the
+segmentation of the data. A segmentation into the smallest possible parts, such
+as individual pixels of an image, is usually far from optimal. Launching a
+thread or process always incurs some fixed overhead, and running more threads
+than processors available increases the overhead of context switching. The
+optimal degree of parallelization can often only be determined empirically.
+
+
+
+
+\subsection{Scalability: Amdahl's Law}
+\todo{Intro: context switching overhead}
 Given a program which contains some part that is not parallelizable
 (sequential), a theoretical limit of speedup known as \emph{Amdahl's law}
 can be determined:
@@ -162,63 +281,10 @@ number of threads. We expect to reach a point where the communication overhead
 dominates the execution time compared to the actual application task. The
 speedup decreases, and may even become negative, meaning the extra overhead
 makes the parallel application run slower than the fully serial one.
-
-
-\subsection{Task Parallelism}
-
-In order to explore and model the ways in which an application can be
-parallelized, two models are usually considered: Task- and data parallelism.
-
-In this first part, the concept of task parallelism is explored. If an
-application consists of multiple individual tasks, those can be performed
-according to its dependencies. \Cref{fig:task_graph} illustrates this in terms
-of a data flow graph: The individual tasks all require some input data, which is
-provided by another task. It is however apparent that the tasks of creating a
-grayscale image and then detecting the lane and the task of creating the RGB
-image and detecting traffic signs can be executed in parallel. They both depend
-on the camera image, but execute independently. The serial part of the
-application continues with the tracking step, which depends on the results of
-all the previous detection steps. Planning can only be performed after the
-tracking step.
-
-\begin{figure}
-	\centering
-	\begin{tikzpicture}
-		\node[draw] (camera) {Camera};
-		\node[draw] (grayscale) [right=of camera] {Bayer to grayscale};
-		\node[draw] (lane) [right=of grayscale] {Detect lane};
-		\node[draw] (rgb) [below=of camera] {Bayer to RGB};
-		\node[draw] (signs) [right=of rgb] {Detect signs};
-		\node[draw] (tracking) [right=of signs] {Tracking};
-		\node[draw] (planning) [right=of tracking] {Planning};
-		\node[draw] (viz) [below=of rgb] {Vizualization};
-		\node[draw] (odom) [below=of tracking] {Odometry};
-
-		\draw[->] (camera) -- (grayscale);
-		\draw[->] (camera) -- (rgb);
-		\draw[->] (grayscale) -- (lane);
-		\draw[->] (lane) -- (tracking);
-		\draw[->] (tracking) -- (planning);
-		\draw[->] (rgb) -- (signs);
-		\draw[->] (signs) -- (tracking);
-		\draw[->] (rgb) -- (viz);
-		\draw[->] (odom) -- (tracking);
-	\end{tikzpicture}
-	\caption{Data flow graph of a fictional task-parallel autonomous-driving application}
-	\label{fig:task_graph}
-\end{figure}
-
-The \emph{critical path} is the path of execution that determines the execution
-time of the entire application. 
-
-\todo{critical path -> serial part (?)}
-
-\todo{Dataflow/Dependency graphs}
-\subsection{Data Parallelism}
+\todo{refer to above}
 
 
 \section{Discussion}
-
 In the following, multiple ways of increasing the performance of an application
 or system are considered. Special attention is given to methods which relieve
 the programmer of some of the difficulties in programming a parallel
@@ -234,7 +300,6 @@ application, and still enable them to benefit from parallelization.
 \todo{fork-and-join pattern}
 
 \subsection{Parallelism below the application level}
-\todo{Parallelism at lower levels? (Parallelizing low-level operations -> Libraries such as OpenCV)}
 One solution to make programs more parallel without requiring the user (the
 programmer) to manually implement parallel programming techniques, is to hide
 the complexity in libraries below the application logic. One example is the
@@ -246,7 +311,6 @@ execute those operations, and even contains GPU implementations using OpenCL and
 CUDA for some algorithms.
 
 \subsection{Parallelism above the application level}
-\todo{Parallelism at higher levels? (Executing multiple modules in parallel -> Frameworks such as ROS/ADTF, Microservices)}
 A different approach to parallelizing application code which is not written in
 an inherently parallel way is to exploit the fact that the application may
 already be divided into more or less independent modules, which can be executed
