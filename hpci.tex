@@ -156,7 +156,7 @@ bad.
 To benefit from the multiple ways of parallel computing described in
 \cref{sec:parallel_computing}, an application has to be analyzed in which ways
 it can be parallelized, and how it scales with an increasing degree of
-parallelization.
+parallelization, and with increasing problem size.
 
 In order to explore and model the ways in which an application can be
 parallelized, two models are usually considered: Task- and data parallelism.
@@ -164,45 +164,41 @@ parallelized, two models are usually considered: Task- and data parallelism.
 In this first part, the concept of task parallelism is explored. If an
 application consists of multiple individual tasks, those can be performed
 according to its dependencies. \Cref{fig:task_graph} illustrates this in terms
-of a data flow graph: The individual tasks all require some input data, which is
-provided by another task. It is however apparent that the tasks of creating a
-grayscale image and then detecting the lane and the task of creating the RGB
-image and detecting traffic signs can be executed in parallel. They both depend
-on the camera image, but execute independently. The serial part of the
+of a data flow graph: In this example of an autonomous driving application, the
+individual tasks all require some input data, which is provided by another task.
+The tracking algorithm for example needs information about both the lane and
+traffic signs in front of the vehicle. It is however apparent that the tasks of
+creating a grayscale image and then detecting the lane and the task of creating
+the RGB image and detecting traffic signs can be executed in parallel. They both
+depend on the camera image, but execute independently. The serial part of the
 application continues with the tracking step, which depends on the results of
 all the previous detection steps. Planning can only be performed after the
 tracking step.
 
 \begin{figure}
 	\centering
-	\begin{tikzpicture}
-		\node[draw] (camera) {Camera};
-		\node[draw] (grayscale) [right=of camera] {Bayer to grayscale};
-		\node[draw] (lane) [right=of grayscale] {Detect lane};
-		\node[draw] (rgb) [below=of camera] {Bayer to RGB};
-		\node[draw] (signs) [right=of rgb] {Detect signs};
-		\node[draw] (tracking) [right=of signs] {Tracking};
-		\node[draw] (planning) [right=of tracking] {Planning};
-		\node[draw] (viz) [below=of rgb] {Vizualization};
-		\node[draw] (odom) [below=of tracking] {Odometry};
-
-		\draw[->] (camera) -- (grayscale);
-		\draw[->] (camera) -- (rgb);
-		\draw[->] (grayscale) -- (lane);
-		\draw[->] (lane) -- (tracking);
-		\draw[->] (tracking) -- (planning);
-		\draw[->] (rgb) -- (signs);
-		\draw[->] (signs) -- (tracking);
-		\draw[->] (rgb) -- (viz);
-		\draw[->] (odom) -- (tracking);
-	\end{tikzpicture}
+	\input{images/dataflow.tex}
 	\caption{Data flow graph of a fictional task-parallel autonomous-driving application}
 	\label{fig:task_graph}
 \end{figure}
 
 The \emph{critical path} is the path of execution that determines the execution
-time of the entire application. This corresponds to the serial part as proposed
-by Amdahl.
+time of the entire application. In \cref{fig:task_graph}, the critical path is
+marked in red. No matter to which degree the application is parallelized, the
+total execution time will never be less than the execution time of the critical
+path, since it's inherently serial. In \cref{sec:amdahl}, this will be be called
+the \emph{serial part} of the application. Another bottleneck arises from the
+available resources: If, for example, the lane-detection and visualization tasks
+both require exclusive access to the GPU, those tasks can not be executed in
+parallel even though the data dependencies would allow it, but sequentially or
+in a switching manner (depending on the scheduling used).
+
+There exist frameworks such as ``SMP Superscalar'' from the Barcelona
+Supercomputing Center and the OpenCV Graph API that allow the programmer to
+directly specify the different tasks and dependencies between them. The
+framework can then execute tasks in parallel and start dependent tasks once
+their input is ready.
+
 
 \subsection{Data Parallelism}
 In data-parallel applications, only one single task is considered. This task is
@@ -224,6 +220,7 @@ optimal degree of parallelization can often only be determined empirically.
 
 
 \subsection{Scalability: Amdahl's Law}
+\label{sec:amdahl}
 \todo{Intro: context switching overhead}
 Given a program which contains some part that is not parallelizable
 (sequential), a theoretical limit of speedup known as \emph{Amdahl's law}
@@ -246,25 +243,8 @@ Or a speedup of
 
 \begin{figure}
 	\centering
-	\begin{tikzpicture}
-		\begin{axis}[
-				width=\textwidth,
-				height=0.5\textwidth,
-				xmin=1, xmax=128,
-				ymin=1, ymax=64,
-				xtick={1,8,16,32,64,128},
-				ytick={1,8,16,32,64},
-				xlabel={Number of cores},
-				ylabel={Speedup}
-			]
-			\foreach [evaluate=\s as \redfrac using (\s*10)] \s in {0,2,...,10} {
-					\edef\temp{\noexpand\addplot[thick, domain=1:128, samples=200, red!\redfrac!green]{x/(x * (\s/100) + (1-(\s/100)))};
-						\noexpand\addlegendentry{$s=\s\%$}}
-					\temp
-				}
-		\end{axis}
-	\end{tikzpicture}
-	\caption{}
+	\input{images/amdahl.tex}
+	\caption{Maximum application with increasing degree of parallelism, according to Amdahl's Law, for varying parts of non-parallelizable code}
 	\label{fig:amdahl}
 \end{figure}
 
@@ -298,6 +278,22 @@ application, and still enable them to benefit from parallelization.
 \subsection{Parallelism at application level}
 \todo{Difficulties: manually using threading interfaces (pthreads), communication, synchronization, limitations such as GIL}
 \todo{fork-and-join pattern}
+
+Direct, explicit parallelization of an application might be the most
+straightforward way of running the program on a parallel architecture. This does
+however mean that several challenges have to be addressed: Threads or processes
+have to be started, the problem has to be partitioned, work has to be
+distributed. Communication has to be established manually, and synchronization
+between threads is necessary.
+
+On this level, operating-system functions such as POSIX \texttt{pthreads} are
+used for creating and managing threads. Synchronisation primitives such as
+semaphores or language specific implementations like the C++ \texttt{std::mutex}
+are used to manage access to shared resources.
+
+Communication between threads can be performed implicitly, by writing results
+into a shared memory segment or by returning results directly when utilizing a
+master-worker pattern.
 
 \subsection{Parallelism below the application level}
 One solution to make programs more parallel without requiring the user (the
@@ -337,6 +333,23 @@ considered an example for data parallelism, while the ROS example is closer to
 task parallelism.
 
 \section{Conclusion}
+Parallel processing architectures enable great advances in computational
+performance despite stagnating clock speeds. To benefit from this development,
+application programmers have to be aware of how execution time scales with an
+ever increasing degree of parallelism, how to exploit the different ways a
+computer architecture realizes parallel execution, and where the pitfalls lie
+when programming a parallel system.
+
+Amdahl's law illustrates how the effect of additional processing elements
+diminishes the higher the inherently serial share of an application is. It
+determines where the theoretical limits are in terms of expected speedup for a
+given application with a varying degree of parallelism.
+
+Task- and Data-Parallelism are two models that can be used to describe the
+parallel nature of a problem, and help to transform that problem into a parallel
+application. Finally, multiple approaches for specific implementations have been
+discussed, from the viewpoint of a layered application utilizing frameworks and
+libraries.
 
 \cleardoublepage
 \section*{Declaration of Originality}

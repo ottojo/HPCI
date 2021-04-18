@@ -1,0 +1,21 @@
+\begin{tikzpicture}
+    \node[draw, red] (camera) {Camera};
+    \node[draw] (grayscale) [right=of camera] {Bayer to grayscale};
+    \node[draw] (lane) [right=of grayscale] {Detect lane};
+    \node[draw, red] (rgb) [below=of camera] {Bayer to RGB};
+    \node[draw, red] (signs) [right=of rgb] {Detect signs};
+    \node[draw, red] (tracking) [right=of signs] {Tracking};
+    \node[draw, red] (planning) [right=of tracking] {Planning};
+    \node[draw] (viz) [below=of rgb] {Visualization};
+    \node[draw] (odom) [below=of tracking] {Odometry};
+
+    \draw[->] (camera) -- (grayscale);
+    \draw[->, red] (camera) -- (rgb);
+    \draw[->] (grayscale) -- (lane);
+    \draw[->] (lane) -- (tracking);
+    \draw[->, red] (tracking) -- (planning);
+    \draw[->, red] (rgb) -- (signs);
+    \draw[->, red] (signs) -- (tracking);
+    \draw[->] (rgb) -- (viz);
+    \draw[->] (odom) -- (tracking);
+\end{tikzpicture}
