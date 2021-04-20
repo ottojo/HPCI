@@ -1,0 +1,20 @@
+\begin{tikzpicture}
+    \begin{axis}[
+            width=\textwidth,
+            height=0.5\textwidth,
+            xmin=75, xmax=100,
+            xticklabel=\pgfmathprintnumber{\tick}\%,
+            %ymin=1, ymax=55,
+            %log basis x=2,
+            xlabel={Parallel part},
+            %xticklabel={\xinttheiexpr[0]2^\tick\relax},
+            ylabel={Speedup},
+            legend pos = north west
+        ]
+        \foreach [evaluate=\n as \redfrac using (\n*1.5)] \n in {64,32,16,4,1} {
+                \edef\temp{\noexpand\addplot[thick, domain=75:100, samples=200, red!\redfrac!green]{\n/(\n * (1-x/100) + (x/100))};
+                    \noexpand\addlegendentry{$n=\n$}}
+                \temp
+            }
+    \end{axis}
+\end{tikzpicture}

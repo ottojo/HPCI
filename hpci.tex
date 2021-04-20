@@ -34,6 +34,9 @@
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.17}
 
+% Amdahl x ticks
+\usepackage{xintexpr}
+
 % Make clickable footnote
 \newcommand{\hyperfootnote}[1][]{\def\ArgI{{#1}}\hyperfootnoteRelay}
  % relay to new command to make extra optional command possible
@@ -153,6 +156,7 @@ and the ratio between program execution time and time spent switching threads is
 bad.
 
 \subsection{Task Parallelism}
+\label{sec:task_parallel}
 To benefit from the multiple ways of parallel computing described in
 \cref{sec:parallel_computing}, an application has to be analyzed in which ways
 it can be parallelized, and how it scales with an increasing degree of
@@ -221,24 +225,26 @@ optimal degree of parallelization can often only be determined empirically.
 
 \subsection{Scalability: Amdahl's Law}
 \label{sec:amdahl}
-\todo{Intro: context switching overhead}
-Given a program which contains some part that is not parallelizable
-(sequential), a theoretical limit of speedup known as \emph{Amdahl's law}
-can be determined:
-\begin{description}
-	\item[$s$] Fraction of purely sequential (non-parallelizable) code
-	\item[$t$] Total execution time before parallelization
-	\item[$n$] Number of cores/processors
-\end{description}
+Not every part of an application can be parallelized. In
+\cref{sec:task_parallel}, it became apparent that tasks often depend on the
+result of other tasks, which forces them to execute sequentially. In data
+parallel applications, segmenting the dataset must be done before parallel
+execution begins.
 
-This gives us a total execution time in the parallel case of:
+Named after the computer scientist Gene Amdahl, the maximum possible speedup of
+an application that consists of a sequential part $s$ and a parallelizable part
+$p=1-s$ can be determined using \emph{Amdahl's Law} \cite{amdahl1967}: Given $n$
+cores or processors, an application which runs in time $t$ before
+parallelization will have an execution time of
 \begin{equation}
 	t_\text{parallel} = s \cdot t + \frac{(1-s)\cdot t}{n}
 \end{equation}
+or slower.
 
-Or a speedup of
+Relating the original and parallelized execution time yields the total speedup
+$S$:
 \begin{eqnarray}
-	\frac{t}{t_\text{parallel}} = \frac{n}{n \cdot s + (1-s)}
+	S = \frac{t}{t_\text{parallel}} = \frac{n}{n \cdot s + (1-s)}
 \end{eqnarray}
 
 \begin{figure}
@@ -251,33 +257,51 @@ Or a speedup of
 This provides us with a theoretical upper bound for the speedup we can expect
 when parallelizing an application.
 
+Graphing this relationship of speedup by number of cores, for varying amounts of
+serial part $s$, results in \cref{fig:amdahl}. It is apparent that even for
+applications that are largely parallelizable, the benefit of adding additional
+processing units diminishes quickly. \Cref*{fig:amdahl_inverted} shows this
+relationship for fixed $n$, and it is apparent that significant performance
+gains require a sufficiently large parallelizable part.
+
+\begin{figure}
+	\centering
+	\input{images/amdahl2.tex}
+	\caption{Amdahl's law graphed for fixed $n$}
+	\label{fig:amdahl_inverted}
+\end{figure}
+
 
 \subsection{Limitations of Amdahl's Law}
 Amdahl's law provides an upper bound, but not one that a programmer can
-reasonably expect to come close to. Even with trivially parallel problems, the
-overhead induced by parallelizing is never zero. Communication, organization and
-management of parallel execution threads takes time, and increases with the
+reasonably expect to immediately reach. Even with trivially parallel problems,
+the overhead induced by parallelizing is never zero. Communication, organization
+and management of parallel execution threads takes time, and increases with the
 number of threads. We expect to reach a point where the communication overhead
 dominates the execution time compared to the actual application task. The
 speedup decreases, and may even become negative, meaning the extra overhead
-makes the parallel application run slower than the fully serial one.
-\todo{refer to above}
-
+makes the parallel application run slower than the fully serial one. In
+\cref{sec:parallel_computing}, it was already mentioned that an operating
+system, which interrupts the running thread to run more threads than available
+processors, can be devastating to performance. While the impact of the operating
+system will not be discussed in detail here, this is important to consider when
+designing parallel programs.
 
 \section{Discussion}
-In the following, multiple ways of increasing the performance of an application
-or system are considered. Special attention is given to methods which relieve
-the programmer of some of the difficulties in programming a parallel
-application, and still enable them to benefit from parallelization.
+
+In the following, the parallelization of applications shall be considered from
+an implementation standpoint. How do the specific ways in which an application
+exploits parallel computations differ? How does that impact the software design
+and architecture? And in which layers of abstraction can the parallelization be
+hidden?
 
 \todo{Patterns: https://www.stolaf.edu/people/rab/pdc/text/patterns.htm}
 
 \todo{How can serial part of task be reduced or estimated?}
-\todo{How are applications written? Retrofitting code with OpenMP?}
 
 \subsection{Parallelism at application level}
 \todo{Difficulties: manually using threading interfaces (pthreads), communication, synchronization, limitations such as GIL}
-\todo{fork-and-join pattern}
+\todo{How are applications written? Retrofitting code with OpenMP?}
 
 Direct, explicit parallelization of an application might be the most
 straightforward way of running the program on a parallel architecture. This does
@@ -287,13 +311,20 @@ distributed. Communication has to be established manually, and synchronization
 between threads is necessary.
 
 On this level, operating-system functions such as POSIX \texttt{pthreads} are
-used for creating and managing threads. Synchronisation primitives such as
+used for creating and managing threads. Synchronization primitives such as
 semaphores or language specific implementations like the C++ \texttt{std::mutex}
-are used to manage access to shared resources.
+are used to manage access to shared resources. Communication between threads can
+be performed implicitly, by writing results into a shared memory segment or by
+returning results directly when utilizing a master-worker pattern.
 
-Communication between threads can be performed implicitly, by writing results
-into a shared memory segment or by returning results directly when utilizing a
-master-worker pattern.
+Another popular pattern is the \emph{fork-and-join} pattern: The program
+repeatedly forks, spawning multiple threads that each work on a portion of the
+current task, and then \emph{joins} those threads, waiting for each to finish
+execution and thus providing a point of synchronization.
+
+An application programmer is however not required to use \texttt{pthreads} and
+friends manually. Libraries such as Intel TBB and compiler extensions like
+OpenACC \cite{openacc} and OpenMP \cite{openmp}
 
 \subsection{Parallelism below the application level}
 One solution to make programs more parallel without requiring the user (the
@@ -350,6 +381,11 @@ parallel nature of a problem, and help to transform that problem into a parallel
 application. Finally, multiple approaches for specific implementations have been
 discussed, from the viewpoint of a layered application utilizing frameworks and
 libraries.
+
+\newpage
+
+\bibliographystyle{IEEEtran}
+\bibliography{bibliography}
 
 \cleardoublepage
 \section*{Declaration of Originality}
