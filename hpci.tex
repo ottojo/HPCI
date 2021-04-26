@@ -195,14 +195,11 @@ the \emph{serial part} of the application. Another bottleneck arises from the
 available resources: If, for example, the lane-detection and visualization tasks
 both require exclusive access to the GPU, those tasks can not be executed in
 parallel, even though the data dependencies would allow it, but sequentially or
-in a switching manner (depending on the scheduling used).
-
-\todo{This to chapter 3?}
-There exist frameworks such as ``SMP Superscalar'' from the Barcelona
-Supercomputing Center and the OpenCV Graph API that allow the programmer to
-directly specify the different tasks and dependencies between them. The
-framework can then execute tasks in parallel and start dependent tasks once
-their input is ready.
+in a switching manner (depending on the scheduling used). There exist frameworks
+such as ``SMP Superscalar'' from the Barcelona Supercomputing Center \cite{hpci}
+and the OpenCV Graph API that allow the programmer to directly specify the
+different tasks and dependencies between them. The framework can then execute
+tasks in parallel and start dependent tasks once their input is ready.
 
 
 \subsection{Data Parallelism}
@@ -222,15 +219,12 @@ One of the main difficulties in parallelizing a data-parallel application is the
 segmentation of the data. A segmentation into the smallest possible parts, such
 as individual pixels of an image, is usually far from optimal. Launching a
 thread or process always incurs some fixed overhead, and running more threads
-than processors available increases the overhead of context switching. 
-
-\todo{Cache, Communication}
-
-The
-optimal degree of parallelization can often only be determined empirically.
-
-
-
+than processors available increases the overhead of context switching. Other
+aspects of segmentation have to be kept in mind: Preserving data locality is
+important to benefit from processor caches, and the particular form of
+segmentation might help reduce communication, such as by only exchanging data at
+the border of the segment between iterations. The optimal degree of
+parallelization can often only be determined empirically.
 
 \subsection{Scalability: Amdahl's Law}
 \label{sec:amdahl}
@@ -295,23 +289,15 @@ system, which interrupts the running thread to run more threads than available
 processors, can be devastating to performance. While the impact of the operating
 system will not be discussed in detail here, this is important to consider when
 designing parallel programs.
-\today{Mehr faktoren die schlecht für parallelisierung sind}
 
 \section{Discussion}
-
 In the following, the parallelization of applications shall be considered from
 an implementation standpoint. How do the specific ways in which an application
 exploits parallel computation differ? How does that impact the software design
 and architecture? And in which layers of abstraction can the parallelization be
 hidden?
 
-\todo{Patterns: https://www.stolaf.edu/people/rab/pdc/text/patterns.htm}
-
-\todo{How can serial part of task be reduced or estimated?}
-
 \subsection{Parallelism at application level}
-\todo{Difficulties: manually using threading interfaces (pthreads), communication, synchronization, limitations such as GIL}
-
 Direct, explicit parallelization of an application might be the most
 straightforward way of running the program on a parallel architecture. This does
 however mean that several challenges have to be addressed: Threads or processes
