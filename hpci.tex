@@ -194,9 +194,10 @@ path, since it's inherently serial. In \cref{sec:amdahl}, this will be be called
 the \emph{serial part} of the application. Another bottleneck arises from the
 available resources: If, for example, the lane-detection and visualization tasks
 both require exclusive access to the GPU, those tasks can not be executed in
-parallel even though the data dependencies would allow it, but sequentially or
+parallel, even though the data dependencies would allow it, but sequentially or
 in a switching manner (depending on the scheduling used).
 
+\todo{This to chapter 3?}
 There exist frameworks such as ``SMP Superscalar'' from the Barcelona
 Supercomputing Center and the OpenCV Graph API that allow the programmer to
 directly specify the different tasks and dependencies between them. The
@@ -205,19 +206,27 @@ their input is ready.
 
 
 \subsection{Data Parallelism}
-In data-parallel applications, only one single task is considered. This task is
-however applied to a large amount of data, which can be split up to parallelize
-the application.
+In data-parallel applications, only one single type of task is considered. This
+task is however applied to a large amount of data, which can be split up to
+parallelize the application. Common examples of data-parallel algorithms are
+found in the field of image processing. When applying a filter in the form of
+convolution with a filter kernel, each pixel in the resulting image could be
+calculated simultaneously. It only depends on a part of the input image, and the
+same operation is applied for each pixel.
 
 It has to be ensured that no data dependencies exist between the individual
-iterations of the task, since tasks would have to wait for completion of the
-previous one otherwise.
+instances of the task, since tasks would have to wait for completion of the
+previous one otherwise (see \cref{sec:task_parallel}).
 
 One of the main difficulties in parallelizing a data-parallel application is the
 segmentation of the data. A segmentation into the smallest possible parts, such
 as individual pixels of an image, is usually far from optimal. Launching a
 thread or process always incurs some fixed overhead, and running more threads
-than processors available increases the overhead of context switching. The
+than processors available increases the overhead of context switching. 
+
+\todo{Cache, Communication}
+
+The
 optimal degree of parallelization can often only be determined empirically.
 
 
@@ -260,7 +269,7 @@ when parallelizing an application.
 Graphing this relationship of speedup by number of cores, for varying amounts of
 serial part $s$, results in \cref{fig:amdahl}. It is apparent that even for
 applications that are largely parallelizable, the benefit of adding additional
-processing units diminishes quickly. \Cref*{fig:amdahl_inverted} shows this
+processing units diminishes quickly. \Cref{fig:amdahl_inverted} shows this
 relationship for fixed $n$, and it is apparent that significant performance
 gains require a sufficiently large parallelizable part.
 
@@ -286,12 +295,13 @@ system, which interrupts the running thread to run more threads than available
 processors, can be devastating to performance. While the impact of the operating
 system will not be discussed in detail here, this is important to consider when
 designing parallel programs.
+\today{Mehr faktoren die schlecht für parallelisierung sind}
 
 \section{Discussion}
 
 In the following, the parallelization of applications shall be considered from
 an implementation standpoint. How do the specific ways in which an application
-exploits parallel computations differ? How does that impact the software design
+exploits parallel computation differ? How does that impact the software design
 and architecture? And in which layers of abstraction can the parallelization be
 hidden?
 
@@ -301,7 +311,6 @@ hidden?
 
 \subsection{Parallelism at application level}
 \todo{Difficulties: manually using threading interfaces (pthreads), communication, synchronization, limitations such as GIL}
-\todo{How are applications written? Retrofitting code with OpenMP?}
 
 Direct, explicit parallelization of an application might be the most
 straightforward way of running the program on a parallel architecture. This does
@@ -315,27 +324,48 @@ used for creating and managing threads. Synchronization primitives such as
 semaphores or language specific implementations like the C++ \texttt{std::mutex}
 are used to manage access to shared resources. Communication between threads can
 be performed implicitly, by writing results into a shared memory segment or by
-returning results directly when utilizing a master-worker pattern.
+returning results directly.
 
-Another popular pattern is the \emph{fork-and-join} pattern: The program
-repeatedly forks, spawning multiple threads that each work on a portion of the
-current task, and then \emph{joins} those threads, waiting for each to finish
-execution and thus providing a point of synchronization.
+A popular pattern for parallel applications is the \emph{fork-and-join} pattern:
+The program repeatedly forks, spawning multiple threads that each work on a
+portion of the current task, and then \emph{joins} those threads, waiting for
+each to finish execution and thus providing a point of synchronization.
+
+The \emph{master-worker} pattern describes a situation in which the work is
+continuously packaged into tasks, which the \emph{master} then submits for
+completion by a \emph{worker}. Both of these popular design patterns can be
+combined, for example by submitting tasks to an existing thread pool instead of
+actually \texttt{fork}ing the process or creating new threads, in order to avoid
+some of the overhead induced by thread-creation.
 
 An application programmer is however not required to use \texttt{pthreads} and
 friends manually. Libraries such as Intel TBB and compiler extensions like
-OpenACC \cite{openacc} and OpenMP \cite{openmp}
+OpenACC \cite{openacc} and OpenMP \cite{openmp} exist and provide developers
+with facilities like thread pools. OpenMP even offers automatic parallelization
+of \texttt{for} loops for example, which implicitly divides the loop into tasks
+submitted to the internal thread pool, and takes care of joining threads and
+collecting results such that the program continues as if execution was
+sequential.
 
 \subsection{Parallelism below the application level}
-One solution to make programs more parallel without requiring the user (the
-programmer) to manually implement parallel programming techniques, is to hide
-the complexity in libraries below the application logic. One example is the
-popular image processing library OpenCV: OpenCV hides complex algorithms behind
-a relatively simple interface. Many of those algorithms in the field of image
-processing lend themselves nicely to a data-parallel approach and benefit
-greatly from parallelization. Therefore, OpenCV maintains a thread pool to
-execute those operations, and even contains GPU implementations using OpenCL and
-CUDA for some algorithms.
+In the interest of hiding implementation details from high-level programs,
+parallelism can be hidden from the application programmer: If a software library
+offers a sufficiently high level of abstraction, it can perform internal
+operations in parallel while maintaining a serial programming model to the
+developer. One example is the popular image processing library OpenCV: OpenCV
+hides complex algorithms behind a relatively simple interface. Many of those
+algorithms in the field of image processing lend themselves nicely to a
+data-parallel approach and benefit greatly from parallelization. Therefore,
+OpenCV maintains a thread pool to execute those operations, and even contains
+GPU implementations using OpenCL and CUDA for some algorithms.
+
+A similar approach is even taken by ubiquitous libraries such as the C++
+\emph{Standard Template Library (STL)}: Since 2017, many of the functions in the
+\texttt{<algorithm>} library take an additional \textit{execution policy}
+argument that allows the programmer to specify that the algorithm shall be
+parallelized, vectorized, both, or neither. The concrete implementation varies
+by library vendor, but an internally maintained thread pool is used at least by
+GCC`s \texttt{libstdc++} (using Intel TBB internally \cite{libstdc++}).
 
 \subsection{Parallelism above the application level}
 A different approach to parallelizing application code which is not written in
