@@ -37,12 +37,6 @@
 % Amdahl x ticks
 \usepackage{xintexpr}
 
-% Make clickable footnote
-\newcommand{\hyperfootnote}[1][]{\def\ArgI{{#1}}\hyperfootnoteRelay}
- % relay to new command to make extra optional command possible
- \newcommand\hyperfootnoteRelay[2][]{\href{#1#2}{\ArgI}\footnote{\href{#1#2}{#2}}}
- % the first optional argument is now in \ArgI, the second is in #1
-
 \begin{document}
 \begin{titlepage}
 
@@ -270,7 +264,7 @@ gains require a sufficiently large parallelizable part.
 \begin{figure}
 	\centering
 	\input{images/amdahl2.tex}
-	\caption{Amdahl's law graphed for fixed $n$}
+	\caption{Amdahl's law graphed for fixed number of processing units $n$}
 	\label{fig:amdahl_inverted}
 \end{figure}
 
@@ -396,7 +390,11 @@ Task- and Data-Parallelism are two models that can be used to describe the
 parallel nature of a problem, and help to transform that problem into a parallel
 application. Finally, multiple approaches for specific implementations have been
 discussed, from the viewpoint of a layered application utilizing frameworks and
-libraries.
+libraries. There is no best way to parallelize any application, and no one
+recipe for reaching the theoretical peak performance. But if the developer is
+conscious about the inherently serial part of the application, and the
+implications thereof, tools, libraries and frameworks exist to take advantage of
+parallel computing architectures at any point in the development process.
 
 \newpage
 
